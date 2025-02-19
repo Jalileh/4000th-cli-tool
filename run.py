@@ -40,7 +40,7 @@ def SavedDirTravel():
     if arg_one == "list":
         DisplayRepositories();
         TerminatePy();
-    elif arg_one == "delete":
+    elif arg_one in ["delete", "remove"]:
         DbDeleteRepoRow( args[2])
         TerminatePy();
         
