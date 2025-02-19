@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from os.path import isdir
 import os, sys, re as rgx
 from typing import List, Tuple
 current_dir = os.getcwd()
@@ -43,6 +44,21 @@ def SavedDirTravel():
     elif arg_one in ["delete", "remove"]:
         DbDeleteRepoRow( args[2])
         TerminatePy();
+    elif arg_one in ['clean', 'fix']:
+      _, repos = DbGetRepoList()
+      for repo in repos:
+        if os.path.isdir(repo.path) == False:
+            print(f"path does not exist.. removing : {repo.path} ")
+            DbDeleteRepoRow(repo.name)
+        TerminatePy();
+    elif arg_one == '--help' or arg_one == '':
+        print("""
+                    (git automation help)
+                    
+                    ARGS: list, fix, <arg:repo>, 
+                    <arg:repo>: add, delete/remove ..
+              """)
+        TerminatePy();
         
         
     
@@ -52,10 +68,8 @@ def SavedDirTravel():
             print("Registering new Repo Name:", newRepoRegistry)
             err = DbSaveCurrentRepo(newRepoRegistry)
             if err: print(err)
-        elif args[2] == 'remove':
-            pass 
         else:
-            return print("Use add or remove");
+            return print("Use add or remove/delete");
     else:
         repoPath, err = DbGetRepo(arg_one)
         EnterNewShellAndExit(repoPath)
@@ -81,8 +95,8 @@ def DbDeleteRepoRow(Name):
        con.execute(f"DELETE FROM {tableName} where name = ?", [Name]);
        con.commit()
     
-def DbGetRepoList() -> tuple[bool, list] :
-    repositories = [Repositories]
+def DbGetRepoList() -> tuple[bool, list[Repositories]] :
+    repositories = []
     tableName = 'repositories'
     try:
        res = con.execute(f"SELECT * FROM {tableName}");
