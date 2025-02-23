@@ -1,150 +1,84 @@
 #!/usr/bin/env python
-from os.path import isdir
-import os, sys, re as rgx
-from typing import List, Tuple
-current_dir = os.getcwd()
-
+import os
+import sys
 import sqlite3 as sql
+from typing import List, Optional
 
-class Repositories:
-  def __init__(self, name, path):
+class Repository:
+    def __init__(self, name: str, path: str):
         self.name = name
         self.path = path
- 
-def TerminatePy(err = 0):
+
+def terminate_py(err: int = 0) -> None:
     exit(err)
-def ExitPrint(string):
-    print(string)
-    TerminatePy()
-    
-def EnterNewShellAndExit(PATH):
-    os.chdir(PATH)
+
+def enter_new_shell_and_exit(path: str) -> None:
+    os.chdir(path)
     os.system("bash")
-    TerminatePy(0)
-     
+    terminate_py(0)
 
-def GetPWD():
+def get_pwd() -> str:
     return os.path.dirname(os.path.realpath(__file__))
-def getArg(index) -> tuple[str, list]:
-    return sys.argv[index], sys.argv
 
-def convPlatform(PATH):
-    return PATH # rgx.sub(r"\\", r"//", PATH)
-    
+def db_delete_repo_row(name: str) -> None:
+    with sql.connect(database_path) as con:
+        con.execute("DELETE FROM repositories WHERE name = ?", [name])
+        con.commit()
 
-databasePath = f'{GetPWD()}/data/repo-brain.db'
-con = sql.connect(f'{databasePath}')
+def db_get_repo_list() -> List[Repository]:
+    with sql.connect(database_path) as con:
+        res = con.execute("SELECT * FROM repositories")
+        return [Repository(name=row[0], path=row[1]) for row in res.fetchall()]
 
-def SavedDirTravel():
-    
-    arg_one, args = getArg(1)
-    if arg_one == "list":
-        DisplayRepositories();
-        TerminatePy();
-    elif arg_one in ["delete", "remove"]:
-        DbDeleteRepoRow( args[2])
-        TerminatePy();
-    elif arg_one in ['clean', 'fix']:
-      _, repos = DbGetRepoList()
-      for repo in repos:
-        if os.path.isdir(repo.path) == False:
-            print(f"path does not exist.. removing : {repo.path} ")
-            DbDeleteRepoRow(repo.name)
-        TerminatePy();
-    elif arg_one == '--help' or arg_one == '':
+def db_get_repo(repo_id: str) -> Optional[str]:
+    with sql.connect(database_path) as con:
+        res = con.execute("SELECT path FROM repositories WHERE name = ?", [repo_id])
+        row = res.fetchone()
+        return row[0] if row else None
+
+def db_save_current_repo(repo_id: str) -> None:
+    with sql.connect(database_path) as con:
+        con.execute("CREATE TABLE IF NOT EXISTS repositories(name TEXT, path TEXT)")
+        con.execute("INSERT INTO repositories VALUES(?, ?)", (repo_id, os.getcwd()))
+        con.commit()
+
+def display_repositories() -> None:
+    repos = db_get_repo_list()
+    for repo in repos:
+        print(f'Access Name: {repo.name}, Path: {repo.path}')
+
+def saved_dir_travel() -> None:
+    if len(sys.argv) < 2:
         print("""
-                    (git automation help)
-                    
-                    ARGS: list, fix, <arg:repo>, 
-                    <arg:repo>: add, delete/remove ..
-              """)
-        TerminatePy();
-        
-        
-    
-    if len(args) > 2:
-        newRepoRegistry = arg_one;
-        if args[2] == 'add':
-            print("Registering new Repo Name:", newRepoRegistry)
-            err = DbSaveCurrentRepo(newRepoRegistry)
-            if err: print(err)
+            (git automation help)
+            
+            ARGS: list, fix, <arg:repo>, 
+            <arg:repo>: add, delete/remove ..
+        """)
+        return
+
+    command, *args = sys.argv[1], sys.argv[2:]
+
+    if command == "list":
+        display_repositories()
+    elif command in ["delete", "remove"] and args:
+        db_delete_repo_row(args[0][0])
+    elif command in ['clean', 'fix']:
+        for repo in db_get_repo_list():
+            if not os.path.isdir(repo.path):
+                print(f"Path does not exist.. removing: {repo.path}")
+                db_delete_repo_row(repo.name)
+    elif command == 'add' and args:
+        print("Registering new Repo Name:", args[0][0])
+        db_save_current_repo(args[0][0])
+    else:
+        repo_path = db_get_repo(command)
+        if repo_path:
+            enter_new_shell_and_exit(repo_path)
         else:
-            return print("Use add or remove/delete");
-    else:
-        repoPath, err = DbGetRepo(arg_one)
-        EnterNewShellAndExit(repoPath)
-        if err: print(err)
-        
-            
+            print(f"Repository '{command}' not found.")
 
-    
-def DisplayRepositories():
-    err, Repositories = DbGetRepoList();
-    if False == err:
-        for repo in Repositories:
-            print(f'Access Name: {repo.name}, Path: {repo.path}')
-            
-            
-    else:
-        print("error db-repository list")
-        
-    
-    
-def DbDeleteRepoRow(Name):
-       tableName = 'repositories'
-       con.execute(f"DELETE FROM {tableName} where name = ?", [Name]);
-       con.commit()
-    
-def DbGetRepoList() -> tuple[bool, list[Repositories]] :
-    repositories = []
-    tableName = 'repositories'
-    try:
-       res = con.execute(f"SELECT * FROM {tableName}");
-       con.commit()
-       rows = res.fetchall()
-       repositories = [Repositories(name=row[0], path=row[1]) for row in rows]
-       return False, repositories
-           
-    except Exception as e:
-        print(e)
-        return True, repositories
-    
-    return repositories, True;
-    
-def DbGetRepo(repoId) -> tuple[str, Exception | bool]:
-     repositoryPath = ""
-     
-     tableName = 'repositories'
-     
-     try:
-        res = con.execute(f"SELECT path FROM {tableName} WHERE name = ?", [repoId] );
-        con.commit()
-        [repositoryPath] = res.fetchone()
-        
-        if repositoryPath is None:
-            raise Exception(f"NO ROW IN {tableName} matches {repoId}")
-            
-     except Exception as e:
-         print(e)
-         
-         return "", e
-     
-     
-     return repositoryPath, False;
- 
-def DbSaveCurrentRepo(repoId) -> Exception | bool:
-     tableName = 'repositories'
-     con.execute(f"CREATE TABLE IF NOT EXISTS {tableName}(name TEXT, path TEXT)" );
-     try:
-         
-        res = con.execute(f"INSERT INTO {tableName} VALUES(?,?)",(repoId, os.getcwd(), ));
-        con.commit()
-        con.close()
-     except Exception as e:
-         print(e)
-         return e     
-     
-     return False;
- 
+database_path = f'{get_pwd()}/data/repo-brain.db'
 
-SavedDirTravel()
+if __name__ == "__main__":
+    saved_dir_travel()

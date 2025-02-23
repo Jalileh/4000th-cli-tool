@@ -1,4 +1,2 @@
 #!/bin/bash
-
 run.py "$@"
- 
